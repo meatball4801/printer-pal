@@ -1,0 +1,26 @@
+[Unit]
+Description=Printer Pal local network boundary
+After=network.target ufw.service nftables.service
+Before=print-monitor.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/print-monitor/network_guard.py --prepare
+User=root
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW CAP_CHOWN CAP_DAC_OVERRIDE CAP_FOWNER
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+# UFW's iptables backends need IPv4/IPv6 control sockets, including raw sockets.
+# Deny IP traffic while permitting those local kernel operations.
+RestrictAddressFamilies=AF_UNIX AF_NETLINK AF_INET AF_INET6
+IPAddressDeny=any
+# UFW updates its own configuration and takes locks under /run.
+ReadWritePaths=/etc/print-monitor /run -/etc/ufw -/var/lib/ufw
+RuntimeDirectory=print-monitor-network
+RuntimeDirectoryPreserve=yes
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

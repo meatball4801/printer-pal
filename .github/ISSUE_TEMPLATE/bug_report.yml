@@ -1,0 +1,49 @@
+name: Bug report
+description: Something isn't working in Printer Pal, Printer Pal Camera, or the Pi companion.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing! Please **don't include** pairing codes, setup links or QR codes, printer access codes, passwords, or IP addresses you'd rather keep private.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open Add camera → Connect your Pi
+        2. …
+  - type: dropdown
+    id: camera
+    attributes:
+      label: Camera type
+      options:
+        - Raspberry Pi with Pi camera module
+        - Raspberry Pi with USB webcam
+        - Raspberry Pi sharing an existing feed (OctoPrint, Klipper, etc.)
+        - Spare iPhone or iPad (Printer Pal Camera)
+        - Camera URL (MJPEG)
+        - Demo camera
+    validations:
+      required: true
+  - type: input
+    id: devices
+    attributes:
+      label: Devices and versions
+      description: iPhone/iPad model and iOS version, Pi model and OS, app build (Settings → Version), companion version (`sudo print-monitor status`).
+      placeholder: iPhone 15, iOS 26.1, Pi 4B on Raspberry Pi OS Bookworm, app 0.8.0 (12), companion 0.6.2
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics (optional)
+      description: The shared summary from Settings → Check connection, and recent lines from `sudo print-monitor logs`.
+      render: text

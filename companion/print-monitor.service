@@ -1,0 +1,30 @@
+[Unit]
+Description=Printer Pal camera companion
+After=network.target
+Requires=print-monitor-network.service
+After=print-monitor-network.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=print-monitor
+Group=print-monitor
+SupplementaryGroups=video render
+ExecStart=/usr/bin/python3 /opt/print-monitor/agent.py --config /etc/print-monitor/config.json --pairing-file /run/print-monitor/pairing.json
+Restart=always
+RestartSec=5
+TimeoutStopSec=20
+StateDirectory=print-monitor
+StateDirectoryMode=0700
+RuntimeDirectory=print-monitor
+RuntimeDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/print-monitor
+PrivateTmp=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+
+[Install]
+WantedBy=multi-user.target

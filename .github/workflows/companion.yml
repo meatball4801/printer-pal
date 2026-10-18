@@ -1,0 +1,34 @@
+name: Companion checks and installer
+on:
+  push:
+    paths: ['companion/**', '.github/workflows/companion.yml']
+  pull_request:
+    paths: ['companion/**', '.github/workflows/companion.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  checks:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Security test dependencies
+        run: sudo apt-get update && sudo apt-get install -y python3-cryptography python3-qrcode nftables iproute2 ufw python3-paho-mqtt
+      - name: Test companion and installer
+        run: python3 -m unittest discover -s companion/tests -v
+      - name: Check shell scripts
+        run: bash -n companion/install.sh companion/bootstrap.sh companion/serve-dev-release.sh companion/install-on-pi.sh companion/tests/linux-network-check.sh companion/tests/linux-service-check.sh
+      - name: Test local-only firewall in an isolated network
+        run: sudo unshare --net --mount --propagation private bash companion/tests/linux-network-check.sh
+      - name: Test real UFW inside the service sandbox
+        run: sudo bash companion/tests/linux-service-check.sh
+      - name: Validate systemd unit
+        run: systemd-analyze verify companion/print-monitor.service companion/print-monitor-network.service companion/print-monitor-network.timer
+      - name: Build and verify standalone installer
+        run: |
+          python3 companion/build_release.py
+          bash dist/printer-pal-install-*.run --check
+      - uses: actions/upload-artifact@v4
+        with:
+          name: printer-pal-companion-installer
+          path: dist/

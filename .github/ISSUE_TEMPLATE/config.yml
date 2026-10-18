@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Ask on Discord
+    url: https://discord.gg/cs4tr9stPS
+    about: Questions, ideas, and help with setup.
+  - name: Report a security problem privately
+    url: https://github.com/meatball4801/printer-pal/security/advisories/new
+    about: Please don't post security issues publicly.
+  - name: Tester guide
+    url: https://github.com/meatball4801/printer-pal/blob/main/TESTING.md
+    about: What to try and how to send feedback from TestFlight.

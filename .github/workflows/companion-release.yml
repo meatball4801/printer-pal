@@ -1,0 +1,36 @@
+name: Publish companion release
+# Push a tag such as companion-v0.6.2 (matching VERSION in companion/agent.py).
+# The release's install.sh is what the one-line installer downloads via releases/latest.
+on:
+  push:
+    tags: ['companion-v*']
+permissions:
+  contents: write
+jobs:
+  release:
+    # Releases are published only from the public companion repository.
+    if: github.repository == 'meatball4801/printer-pal'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test dependencies
+        run: sudo apt-get update && sudo apt-get install -y python3-cryptography python3-qrcode nftables iproute2 ufw python3-paho-mqtt
+      - name: Test companion
+        run: python3 -m unittest discover -s companion/tests
+      - name: Build release files
+        run: |
+          python3 companion/build_release.py
+          version="$(ls dist/printer-pal-install-*.run | sed -E 's/.*install-(.*)\.run/\1/')"
+          if [[ "companion-v$version" != "$GITHUB_REF_NAME" ]]; then
+            echo "Tag $GITHUB_REF_NAME does not match companion version $version" >&2
+            exit 1
+          fi
+          bash dist/printer-pal-install-*.run --check
+          (cd dist && sha256sum --strict -c SHA256SUMS)
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* --latest \
+            --title "Printer Pal companion ${GITHUB_REF_NAME#companion-v}" \
+            --notes "Install or update on the Pi: curl -fsSL https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/install.sh | bash"

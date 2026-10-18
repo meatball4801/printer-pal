@@ -1,0 +1,11 @@
+[Unit]
+Description=Refresh Printer Pal local network rules after address changes
+
+[Timer]
+OnBootSec=30
+OnUnitActiveSec=30
+AccuracySec=1s
+Unit=print-monitor-network.service
+
+[Install]
+WantedBy=timers.target

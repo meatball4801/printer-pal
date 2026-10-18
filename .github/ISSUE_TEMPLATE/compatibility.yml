@@ -1,0 +1,42 @@
+name: Hardware report
+description: Tell us which cameras, Pis, printers, and devices work (or don't).
+labels: [compatibility]
+body:
+  - type: markdown
+    attributes:
+      value: Reports that everything works are just as helpful as problem reports.
+  - type: dropdown
+    id: result
+    attributes:
+      label: How did it go?
+      options:
+        - Works well
+        - Works with problems
+        - Doesn't work
+    validations:
+      required: true
+  - type: input
+    id: hardware
+    attributes:
+      label: Hardware
+      description: Pi model and camera (module or USB webcam model), or the spare iPhone/iPad model and iOS version.
+      placeholder: Pi 3B+ with Logitech C920 / iPhone 7 on iOS 15.8
+    validations:
+      required: true
+  - type: input
+    id: software
+    attributes:
+      label: Pi software
+      description: OS and anything already running, such as OctoPi, MainsailOS, crowsnest, or mjpg-streamer.
+      placeholder: OctoPi 1.1 with its webcam
+  - type: input
+    id: printer
+    attributes:
+      label: Printer (optional)
+      description: For Bambu status, include the model and firmware version.
+      placeholder: Bambu Lab P1S, firmware 01.07.00.00
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Frame rate, stability over a long print, setup trouble, anything else.
