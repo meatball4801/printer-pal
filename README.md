@@ -43,7 +43,7 @@ the [companion guide](companion/README.md).
 - Live video with pinch to zoom, full screen, rotation, pause, and snapshots
 - Automatic reconnection and a built-in connection check
 - Works alongside OctoPrint, Klipper (Mainsail/Fluidd), and other camera software already on your Pi
-- Bambu Lab print status through the Pi: progress, layers, temperatures, and AMS slots (experimental, [guide](companion/BAMBU.md))
+- Bambu Lab print status through your camera, Pi or spare iPhone: progress, layers, temperatures, and AMS slots (experimental, [guide](companion/BAMBU.md))
 - Optional viewing away from home through your own Tailscale network ([guide](companion/REMOTE.md))
 
 ## Privacy and security

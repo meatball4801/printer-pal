@@ -20,15 +20,17 @@ local network.
   deletes its saved details.
 - **On a Raspberry Pi or a spare iPhone running the camera:** its settings, its own security certificate, and hashes
   of the access tokens of paired phones. If you connect a Bambu Lab printer, its address, serial number, and LAN
-  access code are saved in a private file on the Pi. `sudo print-monitor uninstall --confirm` removes all of this from
-  a Pi; deleting Printer Pal Camera removes it from a spare device.
+  access code are saved in a private file on the Pi, or in the Keychain on a spare iPhone or iPad. Disconnecting the
+  printer in Printer Pal removes the access code. `sudo print-monitor uninstall --confirm` removes everything from a Pi.
+  On a spare device, iOS can keep an app's Keychain items after the app is deleted, so disconnect the printer and
+  forget paired phones first.
 
 ## How data moves
 
 - **Video and status** go directly from your camera to your paired phones over an encrypted connection on your local
   network. If you set up Tailscale, they travel over your own Tailscale network instead; Tailscale is a separate
   service with its own [privacy policy](https://tailscale.com/privacy-policy).
-- **Printer status** is read by your Pi directly from your printer on your network. Printer Pal doesn't sign in to
+- **Printer status** is read by your camera (Pi or spare iPhone) directly from your printer on your network. Printer Pal doesn't sign in to
   Bambu Cloud.
 - **Installing from the app:** your Pi's password is sent only to that Pi, over SSH, and isn't saved.
 - **Installing and updating the companion** downloads it from GitHub, and the Pi downloads system packages from its

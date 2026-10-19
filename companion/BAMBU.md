@@ -1,8 +1,10 @@
 # Bambu Lab printer status (experimental)
 
 See print progress, time left, layers, temperatures, and AMS slots under your camera view. Works with a Raspberry Pi
-companion; a spare iPhone camera can't show printer status. Tested on a Bambu Lab A1 with AMS Lite (firmware
-01.08.01.00). Other models and firmware may restrict local access; reports are welcome.
+companion (0.6.0 or later) or a spare iPhone or iPad running Printer Pal Camera, which connects to the printer the same
+way. On a spare device, enter the printer's IP address and serial number; automatic printer discovery is Pi-only for
+now. Tested on a Bambu Lab A1 with AMS Lite (firmware 01.08.01.00). Other models and firmware may restrict local
+access; reports are welcome.
 
 Keep the printer in its existing normal/cloud-connected mode. The Pi opens one
 outgoing MQTT-over-TLS connection directly to the printer's private IPv4 address
