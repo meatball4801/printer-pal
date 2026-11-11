@@ -76,13 +76,13 @@ PY
 python3 -u - "$work_dir" <<'PY' &
 import json,pathlib,sys,threading,time
 sys.path.insert(0,'companion')
-from bambu_monitor import PrinterMonitor
+from print_status import PrinterMonitor
 from network_guard import LANPolicy
 root=pathlib.Path(sys.argv[1])
 monitor=PrinterMonitor(root/'printer.json', LANPolicy(root/'run/print-monitor-network/scopes.json'), threading.Event())
 (root/'discovery-started').touch()
 found=monitor.discover()
-assert {item['serial'] for item in found} == {'BROADCAST123', 'MULTICAST123'}, found
+assert {item['serial'] for item in found if item['kind'] == 'bambu'} == {'BROADCAST123', 'MULTICAST123'}, found
 print('Real LAN broadcast and multicast printer discovery passed on both ports.')
 PY
 discovery_pid="$!"

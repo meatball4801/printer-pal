@@ -1,6 +1,6 @@
 # Privacy policy
 
-*Last updated November 10, 2026*
+*Last updated November 11, 2026*
 
 This policy covers the Printer Pal and Printer Pal Camera apps and the Printer Pal companion for Raspberry Pi. The
 short version: Printer Pal doesn't collect your data. Video, timelapses, and printer information stay on your devices
@@ -20,8 +20,9 @@ and your local network.
   deletes its saved details.
 - **On a Raspberry Pi or a spare iPhone running the camera:** its settings, its own security certificate, and hashes
   of the access tokens of paired phones. If you connect a Bambu Lab printer, its address, serial number, and LAN
-  access code are saved in a private file on the Pi, or in the Keychain on a spare iPhone or iPad. Disconnecting the
-  printer in Printer Pal removes the access code. `sudo print-monitor uninstall --confirm` removes everything from a Pi.
+  access code are saved in a private file on the Pi, or in the Keychain on a spare iPhone or iPad. If you connect
+  Klipper or OctoPrint, its local address and any API key are saved in the same private file on the Pi. Disconnecting
+  the printer in Printer Pal removes the access code or key. `sudo print-monitor uninstall --confirm` removes everything from a Pi.
   On a spare device, iOS can keep an app's Keychain items after the app is deleted, so disconnect the printer and
   forget paired phones first.
 - **Timelapses (optional, off by default):** when you record a timelapse or turn on automatic recording, the camera
@@ -34,8 +35,13 @@ and your local network.
 - **Video and status** go directly from your camera to your paired phones over an encrypted connection on your local
   network. If you set up Tailscale, they travel over your own Tailscale network instead; Tailscale is a separate
   service with its own [privacy policy](https://tailscale.com/privacy-policy).
-- **Printer status** is read by your camera (Pi or spare iPhone) directly from your printer on your network. Printer Pal doesn't sign in to
-  Bambu Cloud.
+- **Printer status** is read by your camera (Pi or spare iPhone) directly from your printer, or from Klipper or
+  OctoPrint, on your network. Printer Pal doesn't sign in to Bambu Cloud or any other printer service.
+- **Print alerts (optional, off by default):** if you turn them on, Printer Pal Camera writes a short alert (the
+  camera's name, the print's name, and whether it finished, stopped, or paused) to your own private iCloud database,
+  and Apple delivers it as a notification to Printer Pal on devices signed in to the same Apple ID. Each camera keeps
+  a single alert record that it overwrites. The developer can't see your iCloud data. Turning alerts off in Printer
+  Pal stops notifications, and turning them off in Printer Pal Camera stops new alerts.
 - **Installing from the app:** your Pi's password is sent only to that Pi, over SSH, and isn't saved.
 - **Installing and updating the companion** downloads it from GitHub, and the Pi downloads system packages from its
   usual package servers. Those services may log requests as they normally do.

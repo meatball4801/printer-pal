@@ -4,7 +4,8 @@ See print progress, time left, layers, temperatures, and AMS slots under your ca
 companion (0.6.0 or later) or a spare iPhone or iPad running Printer Pal Camera, which connects to the printer the same
 way. On a spare device, enter the printer's IP address and serial number; automatic printer discovery is Pi-only for
 now. Tested on a Bambu Lab A1 with AMS Lite (firmware 01.08.01.00). Other models and firmware may restrict local
-access; reports are welcome.
+access; reports are welcome. The Pi companion can also show status from Klipper and OctoPrint printers; see
+[Printer status](README.md#printer-status).
 
 Keep the printer in its existing normal/cloud-connected mode. The Pi opens one
 outgoing MQTT-over-TLS connection directly to the printer's private IPv4 address
@@ -46,7 +47,8 @@ a frame every few seconds and must be started and stopped by hand. The job name 
 - Printer settings are stored in `/var/lib/print-monitor/printer.json`, mode
   0600, inside the service's private 0700 state directory. The access code is
   received only through an authenticated HTTPS POST; it is never returned by
-  the API. Disconnecting the printer removes the saved file and stops monitoring.
+  the API. Disconnecting the printer removes the saved file and stops monitoring. Setting up a different printer
+  replaces it.
 - Local MQTT authenticates as `bblp` using that code. The credential may permit
   more than monitoring on the printer; our implementation exposes no physical
   control API. It subscribes to the serial-specific report topic and publishes

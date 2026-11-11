@@ -11,7 +11,8 @@ import unittest
 from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from bambu_monitor import PrinterMonitor, PrinterTLSContext, ReportState, validated_settings, parse_announcement, make_client
+from bambu_monitor import PrinterTLSContext, ReportState, validated_settings, parse_announcement, make_client
+from print_status import PrinterMonitor
 from network_guard import LANPolicy
 from agent import CameraServer, FrameBuffer, PairingState
 from transport import ensure_identity, server_context, local_client_context
@@ -110,7 +111,7 @@ class BambuTests(unittest.TestCase):
         self.assertIsNone(parse_announcement(payload, '192.168.1.21', self.policy))
 
     def test_discovery_uses_both_ports_joins_physical_lan_and_closes_sockets(self):
-        monitor = PrinterMonitor(self.root / 'printer.json', self.policy, threading.Event())
+        monitor = PrinterMonitor(self.root / 'printer.json', self.policy, threading.Event(), local_discovery=lambda: [])
         first, second = Mock(), Mock()
         first.recvfrom.return_value = (b'NOTIFY * HTTP/1.1\r\nNT: urn:bambulab-com:device:3dprinter:1\r\nLocation: 192.168.1.20\r\nUSN: TESTSERIAL123\r\n\r\n', ('192.168.1.20', 1990))
         second.recvfrom.return_value = first.recvfrom.return_value
@@ -123,6 +124,7 @@ class BambuTests(unittest.TestCase):
             found = monitor.discover()
         self.assertEqual(len(found), 1)
         self.assertEqual(found[0]['serial'], 'TESTSERIAL123')
+        self.assertEqual((found[0]['kind'], found[0]['url']), ('bambu', None))
         first.bind.assert_called_once_with(('', 1990))
         second.bind.assert_called_once_with(('', 2021))
         for listener in (first, second):
@@ -132,7 +134,7 @@ class BambuTests(unittest.TestCase):
         self.assertFalse(monitor.scan_lock.locked())
 
     def test_discovery_reports_busy_ports_and_releases_scan_lock(self):
-        monitor = PrinterMonitor(self.root / 'printer.json', self.policy, threading.Event())
+        monitor = PrinterMonitor(self.root / 'printer.json', self.policy, threading.Event(), local_discovery=lambda: [])
         first, second = Mock(), Mock()
         first.bind.side_effect = OSError('busy')
         second.bind.side_effect = OSError('busy')

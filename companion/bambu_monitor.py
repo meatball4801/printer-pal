@@ -1,9 +1,10 @@
-"""Local status-only Bambu MQTT bridge. No cloud login or printer control API."""
+"""Bambu Lab local MQTT protocol: settings, TLS, reports, and discovery. No cloud login or control API.
+
+The status monitor itself lives in print_status.py.
+"""
 import ipaddress
 import json
-import logging
 import math
-import os
 from pathlib import Path
 import re
 import secrets
@@ -12,8 +13,6 @@ import struct
 from contextlib import ExitStack
 import socket
 import ssl
-import tempfile
-import threading
 import time
 
 CA_FILE = Path(__file__).with_name('bambu-printer-ca.pem')
@@ -216,204 +215,45 @@ def parse_announcement(data, peer, policy):
         return None
 
 
-class PrinterMonitor:
-    def __init__(self, path, policy, stop, client_factory=make_client, clock=time.monotonic):
-        self.path, self.policy, self.stop = Path(path), policy, stop
-        self.client_factory, self.clock = client_factory, clock
-        self.lock = threading.RLock()
-        self.scan_lock = threading.Lock()
-        self.changed = threading.Event()
-        self.generation = 0
-        self.settings = None
-        self.phase = 'not_configured'
-        self.connected = False
-        self.report = ReportState()
-        # Called after each accepted report, outside the lock (for example to wake the timelapse recorder).
-        self.listeners = []
-        if self.path.exists():
+def discover(policy, stop):
+    """Listen briefly for Bambu SSDP announcements on attached LANs. Sends nothing."""
+    found = {}
+    with ExitStack() as stack:
+        listeners = []
+        for port in (1990, 2021):
+            listener = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            stack.callback(listener.close)
+            listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             try:
-                self.settings = validated_settings(json.loads(self.path.read_text()))
-                self.phase = 'connecting'
-            except (OSError, ValueError):
-                self.phase = 'invalid_configuration'
-        self.thread = threading.Thread(target=self.run, name='printer-status', daemon=True)
-
-    def start(self):
-        self.thread.start()
-
-    def configure(self, value):
-        settings = validated_settings(value, self.policy)
-        with self.lock:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            fd, temporary = tempfile.mkstemp(dir=self.path.parent)
-            try:
-                with os.fdopen(fd, 'w') as output:
-                    json.dump(settings, output)
-                    output.flush()
-                    os.fsync(output.fileno())
-                os.chmod(temporary, 0o600)
-                os.replace(temporary, self.path)
-            finally:
-                if os.path.exists(temporary):
-                    os.unlink(temporary)
-            self.settings = settings
-            self.generation += 1
-            self.connected = False
-            self.report = ReportState()
-            self.phase = 'connecting'
-            self.changed.set()
-
-    def forget(self):
-        with self.lock:
-            self.path.unlink(missing_ok=True)
-            self.settings = None
-            self.generation += 1
-            self.connected = False
-            self.report = ReportState()
-            self.phase = 'not_configured'
-            self.changed.set()
-
-    def notify(self):
-        for listener in list(self.listeners):
-            try:
-                listener()
-            except Exception as error:
-                logging.warning('Printer status listener failed (%s)', type(error).__name__)
-
-    def snapshot(self):
-        with self.lock:
-            return {'configured': self.settings is not None, 'connection': self.phase,
-                    'host': self.settings['host'] if self.settings else None,
-                    'serial': self.settings['serial'] if self.settings else None,
-                    **self.report.snapshot(self.clock(), self.connected)}
-
-    def discover(self):
-        if not self.scan_lock.acquire(blocking=False):
-            raise ValueError('A printer search is already running.')
-        try:
-            found = {}
-            with ExitStack() as stack:
-                listeners = []
-                for port in (1990, 2021):
-                    listener = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                    stack.callback(listener.close)
-                    listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                    try:
-                        listener.bind(('', port))
-                    except OSError:
-                        # A service may already own one port. Still try the other.
-                        continue
-                    for interface in self.policy.discovery_interfaces():
-                        try:
-                            membership = struct.pack('=4s4sI', socket.inet_aton('239.255.255.250'),
-                                                     bytes(4), socket.if_nametoindex(interface))
-                            listener.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, membership)
-                        except OSError:
-                            # Broadcast announcements remain usable without multicast.
-                            continue
-                    listener.setblocking(False)
-                    listeners.append(listener)
-                if not listeners:
-                    raise ValueError('Printer discovery ports are busy. Enter the printer details manually.')
-                deadline = time.monotonic() + 8
-                count = 0
-                while time.monotonic() < deadline and not self.stop.is_set() and count < 128:
-                    ready, _, _ = select.select(listeners, [], [], min(0.5, max(0, deadline - time.monotonic())))
-                    for listener in ready:
-                        if count >= 128:
-                            break
-                        try:
-                            data, peer = listener.recvfrom(4097)
-                        except BlockingIOError:
-                            continue
-                        count += 1
-                        item = parse_announcement(data, peer[0], self.policy)
-                        if item and len(found) < 32:
-                            found[item['serial']] = item
-            return list(found.values())
-        finally:
-            self.scan_lock.release()
-
-    def run(self):
-        delay = 2
-        while not self.stop.is_set():
-            with self.lock:
-                settings, generation = self.settings, self.generation
-            if settings is None:
-                self.changed.wait(1)
-                self.changed.clear()
+                listener.bind(('', port))
+            except OSError:
+                # A service may already own one port. Still try the other.
                 continue
-            client = None
-            started = self.clock()
-            try:
-                valid_host(settings['host'], self.policy)
-                client = self.client_factory(settings)
-                topic = f"device/{settings['serial']}/report"
-                def on_connect(current, _userdata, _flags, reason, _properties=None,
-                               expected_generation=generation, expected_topic=topic, cfg=settings):
-                    with self.lock:
-                        if expected_generation != self.generation:
-                            return
-                        self.connected = reason == 0
-                        self.phase = 'waiting' if self.connected else 'authentication_failed'
-                        self.report = ReportState()
-                    if reason == 0:
-                        current.subscribe(expected_topic, qos=0)
-                        # Status refresh only; never physical-control commands.
-                        current.publish(f"device/{cfg['serial']}/request",
-                                        '{"pushing":{"sequence_id":"0","command":"pushall"}}', qos=0, retain=False)
-                def on_message(_current, _userdata, message, expected_generation=generation, expected_topic=topic):
-                    if message.topic != expected_topic:
-                        return
-                    with self.lock:
-                        if expected_generation != self.generation:
-                            return
-                        self.report.update(message.payload, self.clock())
-                        if self.report.updated is not None:
-                            self.phase = 'connected'
-                    self.notify()
-                def on_disconnect(*_args, expected_generation=generation):
-                    with self.lock:
-                        if expected_generation == self.generation:
-                            self.connected = False
-                            if self.phase != 'authentication_failed':
-                                self.phase = 'disconnected'
-                client.on_connect, client.on_message, client.on_disconnect = on_connect, on_message, on_disconnect
-                client.connect(settings['host'], 8883, keepalive=30)
-                refresh = self.clock()
-                while not self.stop.is_set() and generation == self.generation:
-                    # An address change must not redirect stored access to a new subnet.
-                    valid_host(settings['host'], self.policy)
-                    if client.loop(timeout=1) != 0:
-                        raise ConnectionError()
-                    if self.clock() - refresh >= 30:
-                        client.publish(f"device/{settings['serial']}/request",
-                                       '{"pushing":{"sequence_id":"0","command":"pushall"}}', qos=0, retain=False)
-                        refresh = self.clock()
-                delay = 2
-            except Exception as error:
-                # Do not log credentials, serials, addresses, raw reports, or exception text.
-                with self.lock:
-                    if generation == self.generation:
-                        self.connected = False
-                        if isinstance(error, ssl.SSLError):
-                            self.phase = 'certificate_failed'
-                        elif isinstance(error, ImportError):
-                            self.phase = 'dependency_missing'
-                        elif isinstance(error, ValueError):
-                            self.phase = 'network_unavailable'
-                        elif self.phase != 'authentication_failed':
-                            self.phase = 'disconnected'
-            finally:
-                if client:
-                    try:
-                        client.disconnect()
-                    except Exception:
-                        pass
-            if generation != self.generation:
-                continue
-            if self.clock() - started > 60:
-                delay = 2
-            self.changed.wait(delay)
-            self.changed.clear()
-            delay = min(30, delay * 2)
+            for interface in policy.discovery_interfaces():
+                try:
+                    membership = struct.pack('=4s4sI', socket.inet_aton('239.255.255.250'),
+                                             bytes(4), socket.if_nametoindex(interface))
+                    listener.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, membership)
+                except OSError:
+                    # Broadcast announcements remain usable without multicast.
+                    continue
+            listener.setblocking(False)
+            listeners.append(listener)
+        if not listeners:
+            raise ValueError('Printer discovery ports are busy. Enter the printer details manually.')
+        deadline = time.monotonic() + 8
+        count = 0
+        while time.monotonic() < deadline and not stop.is_set() and count < 128:
+            ready, _, _ = select.select(listeners, [], [], min(0.5, max(0, deadline - time.monotonic())))
+            for listener in ready:
+                if count >= 128:
+                    break
+                try:
+                    data, peer = listener.recvfrom(4097)
+                except BlockingIOError:
+                    continue
+                count += 1
+                item = parse_announcement(data, peer[0], policy)
+                if item and len(found) < 32:
+                    found[item['serial']] = item
+    return list(found.values())

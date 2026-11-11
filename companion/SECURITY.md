@@ -24,6 +24,15 @@ and what it doesn't cover.
 - Timelapse ids from requests are checked against a strict pattern before any file is opened, so a request can't
   reach other files on the Pi.
 
+## Printer status
+
+- Printer settings are stored on the Pi in the service's private state directory, readable only by the service. A
+  Bambu access code and an OctoPrint or Moonraker API key are kept the same way.
+- The access code or API key is only received from a paired phone over HTTPS. It's never sent back by the API, never
+  logged, and only sent to the printer address you entered.
+- That address must be the Pi itself or a device on a network the Pi is attached to, and it's checked again before
+  each connection. The companion only reads status: it sends no print or printer control commands.
+
 ## Network boundary
 
 - The companion only accepts connections from networks the Pi is physically attached to. It adds its own nftables

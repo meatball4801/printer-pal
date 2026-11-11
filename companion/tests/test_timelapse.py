@@ -304,7 +304,7 @@ class AutoRecordTests(RecorderTestCase):
         self.assertEqual(self.item(identifier)['stop_reason'], 'finished')
 
     def test_monitor_reports_wake_the_recorder(self):
-        from bambu_monitor import PrinterMonitor
+        from print_status import PrinterMonitor
         monitor = PrinterMonitor(self.root / 'printer.json', None, threading.Event())
         woken = []
         monitor.listeners.append(lambda: woken.append(True))

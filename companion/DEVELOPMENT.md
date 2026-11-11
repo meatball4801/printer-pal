@@ -6,7 +6,8 @@
 | --- | --- |
 | `agent.py` | The HTTPS server: pairing, status, snapshots, and the MJPEG stream |
 | `camera_source.py`, `usb_camera.py`, `autodetect.py` | Pi camera, USB webcam, and existing-feed capture and detection |
-| `bambu_monitor.py` | Read-only Bambu Lab status over the printer's local MQTT |
+| `print_status.py` | The printer status monitor: Klipper (Moonraker) and OctoPrint over local HTTP, and Bambu |
+| `bambu_monitor.py` | The Bambu Lab local MQTT protocol: settings, TLS, reports, and discovery |
 | `timelapse.py` | Timelapse recording, storage limits, and cleanup |
 | `network_guard.py` | The firewall boundary for the companion port (nftables and UFW) |
 | `transport.py` | The device's TLS identity |
@@ -23,7 +24,27 @@ Cameras speak a small HTTPS protocol, which Printer Pal Camera on iOS also imple
 - `POST /api/pair` with `{"code": "123456"}`: returns an access token
 - `GET /api/status`, `GET /snapshot`, and `GET /stream` (MJPEG, boundary `FRAME`): need
   `Authorization: Bearer <token>`
-- `/api/printer` and `/api/printers/discover`: Bambu status
+- Printer status, all with the same token:
+  - `GET /api/printer`: `configured`, `kind` (`bambu`, `klipper`, `octoprint`, or `null` when none is set up),
+    `connection`, `fresh`, `age_seconds`, `host`, `serial`, and `fields` (`state`, `progress_percent`,
+    `remaining_minutes`, `current_layer`, `total_layers`, `nozzle_temp`, `bed_temp`, `job_name`, `active_tray`,
+    `ams_slots`). For Klipper and OctoPrint, `host` comes from the URL, `serial` is `null`, the AMS fields are `null`,
+    and layers are `null` unless Moonraker reports them. `state` is `IDLE`, `PREPARE`, `RUNNING`, `PAUSE`, `FINISH`,
+    or `FAILED` for every kind.
+  - `connection` is `not_configured`, `invalid_configuration`, `connecting`, `waiting`, `connected`, `disconnected`,
+    `authentication_failed`, `certificate_failed`, `network_unavailable`, `dependency_missing`, or `unreachable`.
+    `waiting` for Klipper or OctoPrint means the server answered but the printer isn't ready; `unreachable` means no
+    usable answer from the URL. `disconnected` and `dependency_missing` are Bambu only.
+  - `POST /api/printer`: `{"host", "serial", "access_code"}` (no `kind`, or `"kind": "bambu"`),
+    `{"kind": "klipper", "url": "http://127.0.0.1:7125"}` with an optional `"api_key"`, or
+    `{"kind": "octoprint", "url": "http://127.0.0.1:5000", "api_key": "..."}`. URLs are http or https, loopback or an
+    attached private LAN address, with no credentials, query, or path. Keys are 16 to 128 of `A-Z a-z 0-9 _ -`.
+    Saving replaces any previous printer. A 400 carries a short `error`. Keys are never returned.
+  - `DELETE /api/printer`: forget the printer.
+  - `GET /api/printers/discover`: `{"printers": [...]}`. Each item has `kind`, `name`, `url`, `host`, `serial`, and
+    `mode`. Bambu items have `url: null`; Klipper and OctoPrint items found on this Pi have `host`, `serial`, and
+    `mode` `null` and add `needs_api_key`, and are only included when the request sends
+    `X-Printer-Pal-Discover: all` (Printer Pal 1.1 and later). Takes about eight seconds.
 - A 503 for the stream carries `X-Printer-Pal-Reason: camera-not-ready` or `viewers-full`
 - Timelapses, all with the same token:
   - `GET /api/timelapse`: settings, the current recording, and storage use. `POST` the same with
@@ -47,8 +68,9 @@ Cameras advertise `_printmonitor._tcp` with a `tls=1` TXT record. The setup QR i
 python3 -m unittest discover -s companion/tests
 ```
 
-Tests need Python's `cryptography` and `paho-mqtt` packages. CI also runs the firewall checks in an isolated network
-namespace and the real UFW inside the systemd sandbox (`companion/tests/linux-*.sh`).
+Tests need Python's `cryptography` and `paho-mqtt` packages. Klipper and OctoPrint tests use a local fake server.
+CI also runs the firewall checks in an isolated network namespace and the real UFW inside the systemd sandbox
+(`companion/tests/linux-*.sh`).
 
 ## Trying changes
 

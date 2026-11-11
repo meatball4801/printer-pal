@@ -20,7 +20,7 @@ from config import load_config, validate_config
 from camera_source import CameraWorker
 from timelapse import TimelapseConflict, UnknownTimelapse, valid_id
 
-VERSION = "0.7.0"
+VERSION = "0.8.0"
 
 
 class FrameBuffer(io.BufferedIOBase):
@@ -347,7 +347,8 @@ class CameraHandler(BaseHTTPRequestHandler):
                 self.send_json(200, self.server.printer.snapshot())
             else:
                 try:
-                    self.send_json(200, {'printers': self.server.printer.discover()})
+                    servers = self.headers.get('X-Printer-Pal-Discover', '').strip().lower() == 'all'
+                    self.send_json(200, {'printers': self.server.printer.discover(include_local=servers)})
                 except (OSError, ValueError):
                     self.send_json(503, {'error': 'Printer discovery is unavailable. Enter its local address and serial number instead.'})
             return
@@ -544,7 +545,7 @@ def main():
     from transport import server_context
     context = server_context() if config['tls'] and not args.insecure_http else None
     server = make_server(args.host, config["port"], state, frames, config["name"], bool(args.test_image), context, LANPolicy())
-    from bambu_monitor import PrinterMonitor
+    from print_status import PrinterMonitor
     server.printer = PrinterMonitor(Path(args.state).with_name('printer.json'), server.network_policy, stop)
     from timelapse import TimelapseRecorder, frame_reader, printer_status, storage_paths
     try:

@@ -77,11 +77,31 @@ sudo print-monitor uninstall --confirm       # remove the companion completely
 
 Pairing codes and setup links are private: don't post them anywhere.
 
+## Printer status
+
+Printer Pal can show print progress, time left, layers, and temperatures under the camera view. The companion connects
+to one printer at a time:
+
+- **Bambu Lab** printers over their local connection. See [Bambu Lab printer status](BAMBU.md).
+Klipper and OctoPrint need Printer Pal 1.1 or later.
+
+- **Klipper** through Moonraker (Mainsail or Fluidd). The address is usually `http://127.0.0.1:7125` when Klipper runs
+  on the same Pi. An API key is only needed if Moonraker requires one.
+- **OctoPrint**, usually at `http://127.0.0.1:5000` (or `http://127.0.0.1` on OctoPi). It needs an API key: create one
+  in OctoPrint under **Settings → Application Keys** (or **API**).
+
+In Printer Pal, search for printers or enter the address yourself. The search checks this Pi for Moonraker and
+OctoPrint and listens for Bambu printers on your network. Addresses must be this Pi or another device on your local
+network; the companion checks them every few seconds and only reads status. Layer numbers from Klipper need a slicer
+that sends them (`SET_PRINT_STATS_INFO`); OctoPrint doesn't report layers. An `https://` address needs a certificate
+the Pi trusts, so use the `http://127.0.0.1` address for a server on the same Pi.
+
 ## Timelapses
 
 The companion can record a timelapse of each print. It's off until you turn on auto-record or start a recording in
-Printer Pal. With [Bambu printer status](BAMBU.md), it takes one frame per layer and can start and stop with each
-print. Without it, it takes one frame every few seconds and you start and stop recordings yourself.
+Printer Pal. With [printer status](#printer-status), it can start and stop with each print, and with Bambu printers,
+or Klipper when the slicer reports layers, it takes one frame per layer. Otherwise it takes one frame every few seconds.
+Without printer status, you start and stop recordings yourself.
 
 Timelapses are stored only on the Pi, in `/var/lib/print-monitor/timelapses`, and are only sent to paired phones that
 ask for them. They're deleted after 30 days, the oldest are deleted first once they take up 1 GiB, and recording
