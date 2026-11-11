@@ -48,6 +48,7 @@ def remaining_seconds(value):
     return max(0, int(value["expires_at"] - time.time()))
 
 
+# /var/lib/print-monitor holds pairing state, printer settings, and timelapses (timelapses/, timelapse.json).
 INSTALLED_PATHS = (
     '/etc/systemd/system/print-monitor.service', '/etc/systemd/system/print-monitor-network.service',
     '/etc/systemd/system/print-monitor-network.timer', '/etc/avahi/services/print-monitor.service',
@@ -78,7 +79,7 @@ def uninstall(root=Path('/'), runner=subprocess.run):
     run('systemctl', 'daemon-reload')
     run('systemctl', 'try-reload-or-restart', 'avahi-daemon.service')
     run('userdel', 'print-monitor')
-    print('Printer Pal has been removed, including its settings and phone pairings.')
+    print('Printer Pal has been removed, including its settings, phone pairings, and timelapses.')
     print('Packages it installed, such as Python libraries, ffmpeg, and avahi, were left in place for other software.')
     print('In the Printer Pal app, remove the camera too.')
     return 0

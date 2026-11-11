@@ -77,6 +77,16 @@ sudo print-monitor uninstall --confirm       # remove the companion completely
 
 Pairing codes and setup links are private: don't post them anywhere.
 
+## Timelapses
+
+The companion can record a timelapse of each print. It's off until you turn on auto-record or start a recording in
+Printer Pal. With [Bambu printer status](BAMBU.md), it takes one frame per layer and can start and stop with each
+print. Without it, it takes one frame every few seconds and you start and stop recordings yourself.
+
+Timelapses are stored only on the Pi, in `/var/lib/print-monitor/timelapses`, and are only sent to paired phones that
+ask for them. They're deleted after 30 days, the oldest are deleted first once they take up 1 GiB, and recording
+stops if the Pi has less than 500 MiB free. Uninstalling removes them.
+
 ## Troubleshooting
 
 - **The app can't find the Pi.** Make sure the phone and Pi are on the same Wi-Fi, and that Printer Pal has Local
@@ -95,7 +105,7 @@ Pairing codes and setup links are private: don't post them anywhere.
 sudo print-monitor uninstall --confirm
 ```
 
-This removes the companion, its settings, its security identity, and all phone pairings. Shared packages it may have
+This removes the companion, its settings, its security identity, all phone pairings, and all timelapses. Shared packages it may have
 installed, such as Python libraries, ffmpeg, and avahi, are left in place. Then remove the camera in Printer Pal.
 
 ## More

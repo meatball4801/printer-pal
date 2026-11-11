@@ -34,6 +34,13 @@ allows these two UDP ports only from attached private IPv4 subnets on their
 physical interfaces. No listener runs permanently in the background, no search
 packets are sent, and announcements never trigger a connection or send credentials.
 
+## Timelapses
+
+With printer status connected, [timelapses](README.md#timelapses) can take one frame each time the layer number goes
+up, and auto-record starts a recording when a print starts and stops it when the print finishes, fails, or the printer
+goes idle. No interval frames are taken while the printer is paused. Without printer status, timelapses fall back to
+a frame every few seconds and must be started and stopped by hand. The job name is saved with the timelapse on the Pi.
+
 ## Data and secrets
 
 - Printer settings are stored in `/var/lib/print-monitor/printer.json`, mode

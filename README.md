@@ -1,7 +1,7 @@
 # Printer Pal
 
 Watch your 3D printer from your iPhone or iPad. Printer Pal streams live video from a camera on your home Wi-Fi,
-encrypted, straight to your phone. Nothing is uploaded or recorded, and there's no account to create.
+encrypted, straight to your phone. Nothing is uploaded, and there's no account to create.
 
 Printer Pal is in **public beta**. New testers: start with the [tester guide](TESTING.md), and come say hi on
 [Discord](https://discord.gg/cs4tr9stPS).
@@ -42,13 +42,15 @@ the [companion guide](companion/README.md).
 
 - Live video with pinch to zoom, full screen, rotation, pause, and snapshots
 - Automatic reconnection and a built-in connection check
+- Timelapses recorded on your camera, one frame per layer on Bambu printers or on a timer, saved as videos on your phone
 - Works alongside OctoPrint, Klipper (Mainsail/Fluidd), and other camera software already on your Pi
 - Bambu Lab print status through your camera, Pi or spare iPhone: progress, layers, temperatures, and AMS slots (experimental, [guide](companion/BAMBU.md))
 - Optional viewing away from home through your own Tailscale network ([guide](companion/REMOTE.md))
 
 ## Privacy and security
 
-- Cameras talk to your phone directly on your Wi-Fi. There's no Printer Pal server, account, analytics, or recording.
+- Cameras talk to your phone directly on your Wi-Fi. There's no Printer Pal server, account, or analytics.
+- Timelapses are off until you turn them on, and their frames stay on your camera until you make a video.
 - Each camera creates its own security certificate. You pair by scanning its QR code, and the app checks that exact
   certificate on every connection.
 - The Pi companion only accepts connections from your local network and opens no ports on your router.

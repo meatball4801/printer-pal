@@ -12,9 +12,17 @@ and what it doesn't cover.
   certificate stops the connection; there's no fallback to an unencrypted connection.
 - Pairing allows five wrong codes per minute. A successful pairing gives the phone a random 256-bit access token. The
   camera stores only a hash of it; the phone keeps the token and certificate fingerprint in its Keychain.
-- Video, status, and snapshots all require that token. `sudo print-monitor forget-phones --confirm` revokes every
+- Video, status, snapshots, and timelapses all require that token. `sudo print-monitor forget-phones --confirm` revokes every
   phone immediately, including streams in progress.
 - Connections use TLS 1.2 or newer. Cameras added with **Use a camera URL** over plain HTTP aren't encrypted.
+
+## Timelapses
+
+- Timelapses are off by default. They're stored only on the camera, in the service's private state directory, and
+  are only sent to a paired phone that asks for them.
+- They're deleted after 30 days, the oldest go first once they use 1 GiB, and uninstalling removes them all.
+- Timelapse ids from requests are checked against a strict pattern before any file is opened, so a request can't
+  reach other files on the Pi.
 
 ## Network boundary
 

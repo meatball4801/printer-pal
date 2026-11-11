@@ -1,16 +1,16 @@
 # Privacy policy
 
-*Last updated October 18, 2026*
+*Last updated November 10, 2026*
 
 This policy covers the Printer Pal and Printer Pal Camera apps and the Printer Pal companion for Raspberry Pi. The
-short version: Printer Pal doesn't collect your data. Video and printer information stay on your devices and your
-local network.
+short version: Printer Pal doesn't collect your data. Video, timelapses, and printer information stay on your devices
+and your local network.
 
 ## What Printer Pal doesn't do
 
 - It has no accounts, no servers, and no analytics or advertising SDKs.
 - It doesn't track you or share data with third parties.
-- It doesn't upload, store, or record your camera video.
+- It doesn't upload your camera video, and it doesn't record any unless you turn on timelapses.
 
 ## What stays on your devices
 
@@ -24,6 +24,10 @@ local network.
   printer in Printer Pal removes the access code. `sudo print-monitor uninstall --confirm` removes everything from a Pi.
   On a spare device, iOS can keep an app's Keychain items after the app is deleted, so disconnect the printer and
   forget paired phones first.
+- **Timelapses (optional, off by default):** when you record a timelapse or turn on automatic recording, the camera
+  saves still frames of your printer on the Pi or spare device itself. They're deleted after 30 days, when timelapses
+  use more than 1 GB, when you delete them in Printer Pal, or when you uninstall the companion or delete Printer Pal
+  Camera. Videos you make from them are created on your iPhone or iPad and stay there until you save or share them.
 
 ## How data moves
 
@@ -35,7 +39,8 @@ local network.
 - **Installing from the app:** your Pi's password is sent only to that Pi, over SSH, and isn't saved.
 - **Installing and updating the companion** downloads it from GitHub, and the Pi downloads system packages from its
   usual package servers. Those services may log requests as they normally do.
-- **Snapshots** are shared only when you choose Share, to the destination you pick.
+- **Snapshots and timelapse videos** are shared only when you choose Share or Save, to the destination you pick.
+- **Timelapse frames** go only to your paired phones, over the same encrypted connection as video, when you make a video.
 - **Diagnostic summaries** are created only when you check a connection, and shared only if you tap Share. They
   contain app and companion versions, the check result, and uptime. They don't contain addresses, names, images,
   codes, or credentials.

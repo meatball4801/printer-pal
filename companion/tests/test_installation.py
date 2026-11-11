@@ -51,6 +51,7 @@ class InstallTests(unittest.TestCase):
         self.assertIn(['systemctl', 'enable', 'avahi-daemon.service', 'print-monitor.service', 'print-monitor-network.timer'], self.commands())
         self.assertIn(['systemctl', 'restart', 'print-monitor.service'], self.commands())
         self.assertTrue((self.root / 'opt/print-monitor/camera_source.py').exists())
+        self.assertTrue((self.root / 'opt/print-monitor/timelapse.py').exists())
         self.assertEqual((self.root / 'etc/print-monitor/config.json').stat().st_mode & 0o777, 0o640)
         unit = (self.root / 'etc/systemd/system/print-monitor.service').read_text()
         self.assertIn('Restart=always', unit)

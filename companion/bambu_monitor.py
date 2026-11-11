@@ -1,6 +1,7 @@
 """Local status-only Bambu MQTT bridge. No cloud login or printer control API."""
 import ipaddress
 import json
+import logging
 import math
 import os
 from pathlib import Path
@@ -227,6 +228,8 @@ class PrinterMonitor:
         self.phase = 'not_configured'
         self.connected = False
         self.report = ReportState()
+        # Called after each accepted report, outside the lock (for example to wake the timelapse recorder).
+        self.listeners = []
         if self.path.exists():
             try:
                 self.settings = validated_settings(json.loads(self.path.read_text()))
@@ -269,6 +272,13 @@ class PrinterMonitor:
             self.report = ReportState()
             self.phase = 'not_configured'
             self.changed.set()
+
+    def notify(self):
+        for listener in list(self.listeners):
+            try:
+                listener()
+            except Exception as error:
+                logging.warning('Printer status listener failed (%s)', type(error).__name__)
 
     def snapshot(self):
         with self.lock:
@@ -361,6 +371,7 @@ class PrinterMonitor:
                         self.report.update(message.payload, self.clock())
                         if self.report.updated is not None:
                             self.phase = 'connected'
+                    self.notify()
                 def on_disconnect(*_args, expected_generation=generation):
                     with self.lock:
                         if expected_generation == self.generation:

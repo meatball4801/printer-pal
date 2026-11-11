@@ -7,6 +7,7 @@
 | `agent.py` | The HTTPS server: pairing, status, snapshots, and the MJPEG stream |
 | `camera_source.py`, `usb_camera.py`, `autodetect.py` | Pi camera, USB webcam, and existing-feed capture and detection |
 | `bambu_monitor.py` | Read-only Bambu Lab status over the printer's local MQTT |
+| `timelapse.py` | Timelapse recording, storage limits, and cleanup |
 | `network_guard.py` | The firewall boundary for the companion port (nftables and UFW) |
 | `transport.py` | The device's TLS identity |
 | `install.py`, `install.sh` | The installer that runs on the Pi |
@@ -24,6 +25,18 @@ Cameras speak a small HTTPS protocol, which Printer Pal Camera on iOS also imple
   `Authorization: Bearer <token>`
 - `/api/printer` and `/api/printers/discover`: Bambu status
 - A 503 for the stream carries `X-Printer-Pal-Reason: camera-not-ready` or `viewers-full`
+- Timelapses, all with the same token:
+  - `GET /api/timelapse`: settings, the current recording, and storage use. `POST` the same with
+    `{"enabled": false, "mode": "layer", "interval_seconds": 10}` (mode `layer` or `interval`, 2 to 600 seconds)
+  - `POST /api/timelapse/start` and `/api/timelapse/stop`: a 409 if already recording or not recording
+  - `GET /api/timelapses`: newest first
+  - `GET /api/timelapses/<id>/poster`: the latest frame. `GET /api/timelapses/<id>/frames`: every frame as MJPEG
+    (boundary `FRAME`, frame count in `X-Printer-Pal-Frames`), ending with `--FRAME--`
+  - `DELETE /api/timelapses/<id>`: a 409 while it's recording
+
+Timelapses are stored in `timelapses/<id>/` next to the state file (`meta.json` and `000001.jpg` onward), with their
+settings in `timelapse.json`. Ids are the UTC start time, `YYYYMMDD-HHMMSS`, with `-2` and so on added on collision.
+Printer Pal Camera on iOS implements the same API and limits.
 
 Cameras advertise `_printmonitor._tcp` with a `tls=1` TXT record. The setup QR is
 `https://<host>:<port>/#pin=<sha256 of the certificate>&code=<6 digits>`.

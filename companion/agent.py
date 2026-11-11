@@ -18,8 +18,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
 from config import load_config, validate_config
 from camera_source import CameraWorker
+from timelapse import TimelapseConflict, UnknownTimelapse, valid_id
 
-VERSION = "0.6.3"
+VERSION = "0.7.0"
 
 
 class FrameBuffer(io.BufferedIOBase):
@@ -173,6 +174,8 @@ class CameraServer(ThreadingHTTPServer):
         self.request_slots = threading.BoundedSemaphore(32)
         self.tls_context, self.network_policy = tls_context, network_policy
         self.printer = None
+        self.timelapse = None
+        self.download_slots = threading.BoundedSemaphore(2)
 
     def verify_request(self, request, client_address):
         return self.network_policy is None or self.network_policy.allows(client_address[0])
@@ -260,6 +263,9 @@ class CameraHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = urlsplit(self.path).path
+        if path in ('/api/timelapse', '/api/timelapse/start', '/api/timelapse/stop'):
+            self.timelapse_request('POST', path)
+            return
         if path not in ("/api/pair", "/api/printer"):
             self.send_json(404, {"error": "Not found"})
             return
@@ -274,14 +280,7 @@ class CameraHandler(BaseHTTPRequestHandler):
                 self.send_json(503, {'error': 'Printer monitoring is unavailable.'})
                 return
         try:
-            if self.headers.get("Transfer-Encoding"):
-                raise ValueError()
-            length = int(self.headers.get("Content-Length", "0"))
-            if not 0 < length <= 1024:
-                raise ValueError()
-            body = json.loads(self.rfile.read(length))
-            if not isinstance(body, dict):
-                raise ValueError()
+            body = self.read_json_body()
         except (ValueError, UnicodeError):
             self.send_json(400, {"error": "Invalid setup request"})
             return
@@ -299,7 +298,11 @@ class CameraHandler(BaseHTTPRequestHandler):
         self.send_json(status, result)
 
     def do_DELETE(self):
-        if urlsplit(self.path).path != '/api/printer':
+        path = urlsplit(self.path).path
+        if path.startswith('/api/timelapses/'):
+            self.timelapse_request('DELETE', path)
+            return
+        if path != '/api/printer':
             self.send_json(404, {'error': 'Not found'})
             return
         if not self.server.state.authorized(self.headers.get('Authorization')):
@@ -321,6 +324,9 @@ class CameraHandler(BaseHTTPRequestHandler):
             self.send_json(200, {"protocol": 1, "version": VERSION, "name": self.server.name,
                                  "pairing_open": self.server.state.is_open(),
                                  "demo": self.server.demo})
+            return
+        if path in ('/api/timelapse', '/api/timelapses') or path.startswith('/api/timelapses/'):
+            self.timelapse_request('GET', path)
             return
         if path not in ("/api/status", "/api/printer", "/api/printers/discover", "/snapshot", "/stream"):
             self.send_json(404, {"error": "Not found"})
@@ -384,6 +390,101 @@ class CameraHandler(BaseHTTPRequestHandler):
         finally:
             self.server.stream_slots.release()
 
+    def read_json_body(self):
+        if self.headers.get("Transfer-Encoding"):
+            raise ValueError()
+        length = int(self.headers.get("Content-Length", "0"))
+        if not 0 < length <= 1024:
+            raise ValueError()
+        body = json.loads(self.rfile.read(length))
+        if not isinstance(body, dict):
+            raise ValueError()
+        return body
+
+    def timelapse_request(self, method, path):
+        if not self.server.state.authorized(self.headers.get('Authorization')):
+            self.send_json(401, {'error': 'Pair this camera before viewing.'})
+            return
+        recorder = self.server.timelapse
+        if recorder is None:
+            self.send_json(503, {'error': 'Timelapse recording is unavailable.'})
+            return
+        identifier, action = None, None
+        if path.startswith('/api/timelapses/'):
+            parts = path[len('/api/timelapses/'):].split('/')
+            identifier, action = parts[0], '/'.join(parts[1:]) or None
+            # Ids come from the URL: check the pattern before anything touches the disk.
+            if not valid_id(identifier):
+                self.send_json(404, {'error': 'Timelapse not found.'})
+                return
+        try:
+            if method == 'GET' and path == '/api/timelapse':
+                self.send_json(200, recorder.state())
+            elif method == 'GET' and path == '/api/timelapses':
+                self.send_json(200, recorder.list())
+            elif method == 'POST' and path == '/api/timelapse':
+                try:
+                    body = self.read_json_body()
+                except (ValueError, UnicodeError):
+                    self.send_json(400, {'error': 'Invalid timelapse settings.'})
+                    return
+                self.send_json(200, recorder.configure(body))
+            elif method == 'POST' and path == '/api/timelapse/start':
+                self.send_json(200, recorder.start_recording())
+            elif method == 'POST' and path == '/api/timelapse/stop':
+                self.send_json(200, recorder.stop_recording())
+            elif method == 'DELETE' and identifier and action is None:
+                recorder.delete(identifier)
+                self.send_json(200, {'deleted': True})
+            elif method == 'GET' and identifier and action == 'poster':
+                frame = recorder.poster(identifier)
+                if frame is None:
+                    self.send_json(404, {'error': 'This timelapse has no frames yet.'})
+                    return
+                self.send_response(200)
+                self.send_header('Content-Type', 'image/jpeg')
+                self.send_header('Content-Length', str(len(frame)))
+                self.send_header('Cache-Control', 'no-store')
+                self.end_headers()
+                self.wfile.write(frame)
+            elif method == 'GET' and identifier and action == 'frames':
+                self.send_timelapse_frames(recorder.frame_paths(identifier))
+            else:
+                self.send_json(404, {'error': 'Not found'})
+        except UnknownTimelapse:
+            self.send_json(404, {'error': 'Timelapse not found.'})
+        except TimelapseConflict as error:
+            self.send_json(409, {'error': str(error)})
+        except ValueError as error:
+            self.send_json(400, {'error': str(error)})
+        except OSError:
+            self.send_json(500, {'error': 'Could not save the timelapse on the Pi. Check its storage.'})
+
+    def send_timelapse_frames(self, paths):
+        if not self.server.download_slots.acquire(blocking=False):
+            self.send_json(503, {'error': 'Another timelapse download is in progress.'})
+            return
+        try:
+            self.send_response(200)
+            self.send_header('Content-Type', 'multipart/x-mixed-replace; boundary=FRAME')
+            self.send_header('Cache-Control', 'no-store')
+            self.send_header('X-Printer-Pal-Frames', str(len(paths)))
+            self.end_headers()
+            for path in paths:
+                if not self.server.state.authorized(self.headers.get('Authorization')):
+                    return
+                frame = path.read_bytes()
+                self.wfile.write(b"--FRAME\r\nContent-Type: image/jpeg\r\nContent-Length: "
+                                 + str(len(frame)).encode() + b"\r\n\r\n" + frame + b"\r\n")
+            self.wfile.write(b'--FRAME--\r\n')
+            self.wfile.flush()
+        except OSError:
+            # Deleted or expired while sending, or the viewer went away. The connection closes.
+            pass
+        finally:
+            self.close_connection = True
+            self.server.download_slots.release()
+
 
 def start_camera(frames):
     from picamera2 import Picamera2
@@ -445,6 +546,15 @@ def main():
     server = make_server(args.host, config["port"], state, frames, config["name"], bool(args.test_image), context, LANPolicy())
     from bambu_monitor import PrinterMonitor
     server.printer = PrinterMonitor(Path(args.state).with_name('printer.json'), server.network_policy, stop)
+    from timelapse import TimelapseRecorder, frame_reader, printer_status, storage_paths
+    try:
+        server.timelapse = TimelapseRecorder(*storage_paths(args.state), frame_reader(frames),
+                                             lambda: printer_status(server.printer), stop)
+    except OSError as error:
+        logging.warning('Timelapse storage is unavailable (%s)', type(error).__name__)
+    else:
+        server.printer.listeners.append(server.timelapse.wake)
+        server.timelapse.start()
     server.printer.start()
 
     def open_pairing(*_):
@@ -471,6 +581,8 @@ def main():
     def shutdown(*_):
         stop.set()
         server.printer.changed.set()
+        if server.timelapse:
+            server.timelapse.wake()
         threading.Thread(target=server.shutdown, daemon=True).start()
 
     signal.signal(signal.SIGTERM, shutdown)
@@ -484,6 +596,9 @@ def main():
         if worker:
             worker.thread.join(timeout=12)
         server.printer.thread.join(timeout=3)
+        if server.timelapse:
+            server.timelapse.thread.join(timeout=3)
+            server.timelapse.close()
 
 
 if __name__ == "__main__":
