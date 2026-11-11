@@ -21,7 +21,8 @@ and your local network.
 - **On a Raspberry Pi or a spare iPhone running the camera:** its settings, its own security certificate, and hashes
   of the access tokens of paired phones. If you connect a Bambu Lab printer, its address, serial number, and LAN
   access code are saved in a private file on the Pi, or in the Keychain on a spare iPhone or iPad. If you connect
-  Klipper or OctoPrint, its local address and any API key are saved in the same private file on the Pi. Disconnecting
+  Klipper or OctoPrint, its local address and any API key are saved in the same private file on the Pi, or in the
+  Keychain on a spare device. A spare device also keeps a random key for remote viewing in its Keychain. Disconnecting
   the printer in Printer Pal removes the access code or key. `sudo print-monitor uninstall --confirm` removes everything from a Pi.
   On a spare device, iOS can keep an app's Keychain items after the app is deleted, so disconnect the printer and
   forget paired phones first.
@@ -42,6 +43,13 @@ and your local network.
   and Apple delivers it as a notification to Printer Pal on devices signed in to the same Apple ID. Each camera keeps
   a single alert record that it overwrites. The developer can't see your iCloud data. Turning alerts off in Printer
   Pal stops notifications, and turning them off in Printer Pal Camera stops new alerts.
+- **Remote viewing with a spare iPhone or iPad:** when you open a spare-device camera in Printer Pal away from home,
+  Printer Pal writes a short request to your own private iCloud database, and while that request is current (about
+  a minute, renewed while you watch), Printer Pal Camera saves a still picture there every couple of seconds,
+  overwriting the last one. Pictures are encrypted on the camera with a key that only your paired devices receive,
+  over the local encrypted connection, so neither Apple nor the developer can see them. Nothing is sent when no one
+  is watching. Turn off "View away from home" in Printer Pal Camera to stop it; forgetting paired phones there
+  changes the key.
 - **Installing from the app:** your Pi's password is sent only to that Pi, over SSH, and isn't saved.
 - **Installing and updating the companion** downloads it from GitHub, and the Pi downloads system packages from its
   usual package servers. Those services may log requests as they normally do.
