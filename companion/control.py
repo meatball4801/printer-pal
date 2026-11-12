@@ -48,7 +48,8 @@ def remaining_seconds(value):
     return max(0, int(value["expires_at"] - time.time()))
 
 
-# /var/lib/print-monitor holds pairing state, printer settings, and timelapses (timelapses/, timelapse.json).
+# /var/lib/print-monitor holds pairing state, printer settings, print history (prints.json), and timelapses
+# (timelapses/, timelapse.json).
 INSTALLED_PATHS = (
     '/etc/systemd/system/print-monitor.service', '/etc/systemd/system/print-monitor-network.service',
     '/etc/systemd/system/print-monitor-network.timer', '/etc/avahi/services/print-monitor.service',

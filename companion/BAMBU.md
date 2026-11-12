@@ -14,6 +14,13 @@ connection to the Pi. No Bambu account, cloud broker, local MQTT broker, control
 plugin, or router port forwarding is used. Firmware may restrict access or
 status refreshes; failed access does not cause a mode change or cloud fallback.
 
+## Controls
+
+With companion 0.9.0 or later, a paired phone can pause, resume, or stop a print and turn the chamber light on or off.
+The Pi sends these over the same local MQTT connection, only when a paired phone asks. Newer Bambu firmware may ignore
+control commands over the local connection unless **Developer Mode** is turned on in the printer's LAN settings.
+Status reading works either way, and the companion doesn't change any printer settings.
+
 ## Setup
 
 1. Install or update the Pi companion. Camera pairing and settings are kept.
@@ -35,7 +42,9 @@ allows these two UDP ports only from attached private IPv4 subnets on their
 physical interfaces. No listener runs permanently in the background, no search
 packets are sent, and announcements never trigger a connection or send credentials.
 
-## Timelapses
+## Timelapses and print history
+
+Each print is also added to the [print history](README.md#print-history) on the Pi, with its name, times, and result.
 
 With printer status connected, [timelapses](README.md#timelapses) can take one frame each time the layer number goes
 up, and auto-record starts a recording when a print starts and stops it when the print finishes, fails, or the printer
@@ -49,10 +58,11 @@ a frame every few seconds and must be started and stopped by hand. The job name 
   received only through an authenticated HTTPS POST; it is never returned by
   the API. Disconnecting the printer removes the saved file and stops monitoring. Setting up a different printer
   replaces it.
-- Local MQTT authenticates as `bblp` using that code. The credential may permit
-  more than monitoring on the printer; our implementation exposes no physical
-  control API. It subscribes to the serial-specific report topic and publishes
-  only the fixed `pushing/pushall` status-refresh request, at most every 30 seconds.
+- Local MQTT authenticates as `bblp` using that code. It subscribes to the
+  serial-specific report topic and publishes the fixed `pushing/pushall`
+  status-refresh request, at most every 30 seconds. The only other messages are
+  the fixed pause, resume, stop, and chamber light commands, each sent once when
+  a paired phone asks, at most once a second.
 - TLS verifies the manufacturer CA chain, certificate validity, and printer
   serial as the certificate hostname/SNI. It does not disable certificate
   verification, silently trust an unknown certificate, or use an environment proxy.

@@ -10,7 +10,7 @@ import re
 import tarfile
 
 SOURCE = Path(__file__).resolve().parent
-FILES = ("agent.py", "camera_source.py", "autodetect.py", "usb_camera.py", "config.py", "install.py", "install.sh", "control.py", "print-monitor.service", "README.md", "SECURITY.md", "network_guard.py", "transport.py", "print-monitor-network.service", "print-monitor-network.timer", "bambu_monitor.py", "print_status.py", "timelapse.py", "bambu-printer-ca.pem", "BAMBU.md")
+FILES = ("agent.py", "camera_source.py", "autodetect.py", "usb_camera.py", "config.py", "install.py", "install.sh", "control.py", "print-monitor.service", "README.md", "SECURITY.md", "network_guard.py", "transport.py", "print-monitor-network.service", "print-monitor-network.timer", "bambu_monitor.py", "print_status.py", "print_history.py", "timelapse.py", "bambu-printer-ca.pem", "BAMBU.md")
 
 HEADER = '''#!/usr/bin/env bash
 set -euo pipefail

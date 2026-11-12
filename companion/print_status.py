@@ -1,7 +1,8 @@
-"""Read-only printer status: Bambu Lab over local MQTT, Klipper (Moonraker) and OctoPrint over local HTTP.
+"""Printer status and controls: Bambu Lab over local MQTT, Klipper (Moonraker) and OctoPrint over local HTTP.
 
-One printer is configured at a time. Every kind produces the same snapshot for the app and the timelapse recorder.
-No printer control requests are ever sent.
+One printer is configured at a time. Every kind produces the same snapshot for the app, the timelapse recorder, and
+the print history. Control commands (pause, resume, stop, and a Bambu chamber light) are only sent when a paired phone
+asks for one, to the same saved address, and never through a cloud service.
 """
 from concurrent.futures import ThreadPoolExecutor
 from http.client import HTTPException
@@ -39,6 +40,27 @@ MOONRAKER_QUERY = '/printer/objects/query?webhooks&print_stats&virtual_sdcard&di
 MOONRAKER_STATES = {'standby': 'IDLE', 'printing': 'RUNNING', 'paused': 'PAUSE', 'complete': 'FINISH',
                     'cancelled': 'FAILED', 'error': 'FAILED'}
 
+# Printer controls
+CONTROLS = {'bambu': ('pause', 'resume', 'stop', 'light'), 'klipper': ('pause', 'resume', 'stop'),
+            'octoprint': ('pause', 'resume', 'stop')}
+ACTIONS = ('pause', 'resume', 'stop', 'light_on', 'light_off')
+CONTROL_INTERVAL = 1.0
+BAMBU_SEND_TIMEOUT = 3
+BAMBU_LIGHT = ('{"system":{"sequence_id":"0","command":"ledctrl","led_node":"chamber_light","led_mode":"%s",'
+               '"led_on_time":500,"led_off_time":500,"loop_times":0,"interval_time":0}}')
+BAMBU_COMMANDS = {'pause': '{"print":{"sequence_id":"0","command":"pause","param":""}}',
+                  'resume': '{"print":{"sequence_id":"0","command":"resume","param":""}}',
+                  'stop': '{"print":{"sequence_id":"0","command":"stop","param":""}}',
+                  'light_on': BAMBU_LIGHT % 'on', 'light_off': BAMBU_LIGHT % 'off'}
+MOONRAKER_COMMANDS = {'pause': '/printer/print/pause', 'resume': '/printer/print/resume', 'stop': '/printer/print/cancel'}
+OCTOPRINT_COMMANDS = {'pause': {'command': 'pause', 'action': 'pause'}, 'resume': {'command': 'pause', 'action': 'resume'},
+                      'stop': {'command': 'cancel'}}
+# The states each action needs, and the error otherwise. Lights work in any state.
+ACTION_STATES = {'pause': (('RUNNING', 'PREPARE'), "The printer isn't printing."),
+                 'resume': (('PAUSE',), "The print isn't paused."),
+                 'stop': (('RUNNING', 'PREPARE', 'PAUSE'), "The printer isn't printing.")}
+NOT_CONNECTED = "The printer isn't connected right now."
+
 
 # Errors from one HTTP poll. Each names the connection value it is reported as.
 
@@ -63,6 +85,14 @@ class CertificateFailed(StatusError):
 class NotReady(StatusError):
     """The server answered, but the printer isn't ready (Klipper starting, or OctoPrint not connected to it)."""
     phase = 'waiting'
+
+
+class ControlError(Exception):
+    """A printer control request that can't be sent, with its HTTP status and app-facing message."""
+
+    def __init__(self, status, message):
+        super().__init__(message)
+        self.status, self.message = status, message
 
 
 # Settings
@@ -188,6 +218,68 @@ def http_get(opener, url, api_key=None, timeout=REQUEST_TIMEOUT, limit=MAX_RESPO
         raise CertificateFailed() from None
     except (OSError, HTTPException, ValueError):
         raise StatusError() from None
+
+
+def http_post(opener, url, api_key=None, body=None, timeout=REQUEST_TIMEOUT):
+    """The status of one control request. Same rules as http_get: raises a StatusError when nothing answers."""
+    headers = {'Accept': 'application/json', 'User-Agent': 'PrinterPal-status'}
+    if api_key:
+        headers['X-Api-Key'] = api_key
+    data = b''
+    if body is not None:
+        data = json.dumps(body, separators=(',', ':')).encode()
+        headers['Content-Type'] = 'application/json'
+    try:
+        with opener.open(Request(url, data=data, headers=headers, method='POST'), timeout=timeout) as response:
+            try:
+                read_limited(response, MAX_RESPONSE_BYTES, True)
+            except (OSError, HTTPException, ValueError):
+                pass  # The status already says whether the command was accepted.
+            return response.status
+    except HTTPError as error:
+        error.close()
+        return error.code
+    except URLError as error:
+        if isinstance(error.reason, ssl.SSLError):
+            raise CertificateFailed() from None
+        raise StatusError() from None
+    except ssl.SSLError:
+        raise CertificateFailed() from None
+    except (OSError, HTTPException, ValueError):
+        raise StatusError() from None
+
+
+def send_http_control(opener, settings, kind, action):
+    """Send a Klipper or OctoPrint control. Raises ControlError unless the server accepts it."""
+    if kind == 'klipper':
+        url, body = settings['url'] + MOONRAKER_COMMANDS[action], None
+    else:
+        url, body = settings['url'] + '/api/job', OCTOPRINT_COMMANDS[action]
+    try:
+        status = http_post(opener, url, settings.get('api_key'), body)
+    except StatusError:
+        status = None
+    except Exception as error:
+        # Do not log keys, addresses, responses, or exception text.
+        logging.warning('Printer control request failed (%s)', type(error).__name__)
+        status = None
+    if status is not None and 200 <= status < 300:
+        return
+    if status in (401, 403):
+        raise ControlError(403, 'Check the API key.')
+    if status == 409:
+        raise ControlError(409, "The printer can't do that right now.")
+    raise ControlError(502, "The printer didn't accept the command.")
+
+
+class PendingPublish:
+    """A Bambu command handed from an HTTP thread to the MQTT session thread, which alone uses the client."""
+
+    def __init__(self, generation, payload):
+        self.generation, self.payload = generation, payload
+        self.taken = False
+        self.sent = False
+        self.done = threading.Event()
 
 
 def fetch_json(opener, url, api_key=None, timeout=REQUEST_TIMEOUT):
@@ -399,7 +491,7 @@ def discover_local(host='127.0.0.1', moonraker_ports=(7125,), octoprint_ports=(5
 
 class PrinterMonitor:
     def __init__(self, path, policy, stop, client_factory=make_client, clock=time.monotonic, opener=None,
-                 poll_interval=POLL_SECONDS, local_discovery=discover_local):
+                 poll_interval=POLL_SECONDS, local_discovery=discover_local, send_timeout=BAMBU_SEND_TIMEOUT):
         self.path, self.policy, self.stop = Path(path), policy, stop
         self.client_factory, self.clock = client_factory, clock
         self.opener = opener or make_opener()
@@ -416,6 +508,14 @@ class PrinterMonitor:
         self.report = ReportState()
         # Called after each accepted report or poll, outside the lock (for example to wake the timelapse recorder).
         self.listeners = []
+        # Called after the printer settings are saved or removed, outside the lock (for example to end a print in the
+        # print history).
+        self.settings_listeners = []
+        # Bambu commands waiting for the MQTT session thread. Guarded by self.lock.
+        self.outbox = []
+        self.send_timeout = send_timeout
+        self.control_lock = threading.Lock()
+        self.last_control = None
         if self.path.exists():
             try:
                 self._use(validated_printer(json.loads(self.path.read_text()), None), 'connecting')
@@ -433,6 +533,10 @@ class PrinterMonitor:
         self.connected = False
         self.report = PolledState() if self.kind in HTTP_KINDS else ReportState()
         self.phase = phase
+        # Commands for the previous printer are never sent to the new one.
+        for item in self.outbox:
+            item.done.set()
+        self.outbox = []
         self.changed.set()
 
     def configure(self, value):
@@ -452,14 +556,16 @@ class PrinterMonitor:
                 if os.path.exists(temporary):
                     os.unlink(temporary)
             self._use(settings, 'connecting')
+        self.notify(self.settings_listeners)
 
     def forget(self):
         with self.lock:
             self.path.unlink(missing_ok=True)
             self._use(None, 'not_configured')
+        self.notify(self.settings_listeners)
 
-    def notify(self):
-        for listener in list(self.listeners):
+    def notify(self, listeners=None):
+        for listener in list(self.listeners if listeners is None else listeners):
             try:
                 listener()
             except Exception as error:
@@ -476,7 +582,59 @@ class PrinterMonitor:
                 host = url_host(settings['url'])
             return {'configured': settings is not None, 'kind': kind, 'connection': self.phase, 'host': host,
                     'serial': settings['serial'] if kind == 'bambu' else None,
-                    **self.report.snapshot(self.clock(), self.connected)}
+                    **self.report.snapshot(self.clock(), self.connected),
+                    'controls': list(CONTROLS.get(kind, ()))}
+
+    # Controls, called from HTTP handler threads
+
+    def control(self, body):
+        """Send one control action from a request body. Raises ControlError; returns None once it's sent."""
+        with self.control_lock:
+            now = self.clock()
+            if self.last_control is not None and 0 <= now - self.last_control < CONTROL_INTERVAL:
+                raise ControlError(429, 'Wait a moment and try again.')
+            self.last_control = now
+        if not isinstance(body, dict) or set(body) != {'action'} or not isinstance(body['action'], str) \
+                or body['action'] not in ACTIONS:
+            raise ControlError(400, 'Unknown printer action.')
+        action = body['action']
+        with self.lock:
+            settings, kind, generation = self.settings, self.kind, self.generation
+            if settings is None:
+                raise ControlError(409, 'Connect a printer first.')
+            if ('light' if action.startswith('light_') else action) not in CONTROLS.get(kind, ()):
+                raise ControlError(400, "This printer doesn't support that.")
+            status = self.report.snapshot(self.clock(), self.connected)
+            if not status['fresh']:
+                raise ControlError(409, NOT_CONNECTED)
+            if action in ACTION_STATES:
+                states, message = ACTION_STATES[action]
+                if status['fields'].get('state') not in states:
+                    raise ControlError(409, message)
+            if kind == 'bambu':
+                pending = PendingPublish(generation, BAMBU_COMMANDS[action])
+                self.outbox.append(pending)
+        if kind == 'bambu':
+            self._wait_for_publish(pending)
+            return
+        try:
+            # An address change must not redirect stored keys to a new subnet.
+            valid_http_host(url_host(settings['url']), self.policy)
+        except ValueError:
+            raise ControlError(409, NOT_CONNECTED) from None
+        send_http_control(self.opener, settings, kind, action)
+
+    def _wait_for_publish(self, pending):
+        if not pending.done.wait(self.send_timeout):
+            with self.lock:
+                if not pending.taken:
+                    # The session never picked it up (still connecting, or the connection dropped). Don't send it late.
+                    if pending in self.outbox:
+                        self.outbox.remove(pending)
+                    raise ControlError(409, NOT_CONNECTED)
+            pending.done.wait(self.send_timeout)
+        if not pending.sent:
+            raise ControlError(409, NOT_CONNECTED)
 
     def discover(self, include_local=True):
         """Bambu printers on the network, plus Klipper and OctoPrint on this Pi when include_local is set.
@@ -600,7 +758,7 @@ class PrinterMonitor:
                     self.report = ReportState()
                 if reason == 0:
                     current.subscribe(expected_topic, qos=0)
-                    # Status refresh only; never physical-control commands.
+                    # Ask for a full status report. Control commands are only sent from _publish_pending.
                     current.publish(f"device/{cfg['serial']}/request",
                                     '{"pushing":{"sequence_id":"0","command":"pushall"}}', qos=0, retain=False)
 
@@ -628,8 +786,10 @@ class PrinterMonitor:
             while not self.stop.is_set() and generation == self.generation:
                 # An address change must not redirect stored access to a new subnet.
                 valid_host(settings['host'], self.policy)
-                if client.loop(timeout=1) != 0:
+                # A short wait keeps control commands from phones prompt.
+                if client.loop(timeout=0.25) != 0:
                     raise ConnectionError()
+                self._publish_pending(client, settings, generation)
                 if self.clock() - refresh >= 30:
                     client.publish(f"device/{settings['serial']}/request",
                                    '{"pushing":{"sequence_id":"0","command":"pushall"}}', qos=0, retain=False)
@@ -649,6 +809,7 @@ class PrinterMonitor:
                     elif self.phase != 'authentication_failed':
                         self.phase = 'disconnected'
         finally:
+            self._drop_pending(generation)
             if client:
                 try:
                     client.disconnect()
@@ -661,3 +822,29 @@ class PrinterMonitor:
         self.changed.wait(delay)
         self.changed.clear()
         return min(30, delay * 2)
+
+    def _publish_pending(self, client, settings, generation):
+        """Publish control commands queued by HTTP threads. Runs on the session thread, between loop calls."""
+        with self.lock:
+            if not self.connected or generation != self.generation:
+                return
+            pending = [item for item in self.outbox if item.generation == generation]
+            for item in pending:
+                item.taken = True
+                self.outbox.remove(item)
+        for item in pending:
+            try:
+                info = client.publish(f"device/{settings['serial']}/request", item.payload, qos=0, retain=False)
+                item.sent = getattr(info, 'rc', None) == 0
+            except Exception as error:
+                logging.warning('Printer control publish failed (%s)', type(error).__name__)
+                item.sent = False
+            finally:
+                item.done.set()
+
+    def _drop_pending(self, generation):
+        """The session ended: commands still waiting for it fail rather than go out on a later connection."""
+        with self.lock:
+            for item in [item for item in self.outbox if item.generation == generation]:
+                self.outbox.remove(item)
+                item.done.set()

@@ -24,17 +24,32 @@ BAMBU = {'host': '192.168.1.20', 'serial': 'TESTSERIAL123', 'access_code': 'aB12
 
 
 class FakeHTTP:
-    """A local web server answering fixed routes, recording each request's path and headers."""
+    """A local web server answering fixed routes, recording each request's path and headers (and POST bodies)."""
 
     def __init__(self):
         self.routes = {}
         self.requests = []
+        self.post_routes = {}
+        self.posts = []
         outer = self
 
         class Handler(BaseHTTPRequestHandler):
             def do_GET(self):
                 outer.requests.append((self.path, dict(self.headers)))
                 status, body, headers = outer.routes.get(self.path, (404, {'error': 'Not found'}, {}))
+                raw = body if isinstance(body, bytes) else json.dumps(body).encode()
+                self.send_response(status)
+                for name, value in headers.items():
+                    self.send_header(name, value)
+                self.send_header('Content-Length', str(len(raw)))
+                self.end_headers()
+                self.wfile.write(raw)
+
+            def do_POST(self):
+                length = int(self.headers.get('Content-Length') or 0)
+                body = self.rfile.read(length)
+                outer.posts.append((self.path, dict(self.headers), body))
+                status, body, headers = outer.post_routes.get(self.path, (404, {'error': 'Not found'}, {}))
                 raw = body if isinstance(body, bytes) else json.dumps(body).encode()
                 self.send_response(status)
                 for name, value in headers.items():
@@ -54,6 +69,9 @@ class FakeHTTP:
 
     def route(self, path, body, status=200, headers=None):
         self.routes[path] = (status, body, headers or {})
+
+    def post_route(self, path, body, status=200, headers=None):
+        self.post_routes[path] = (status, body, headers or {})
 
     def close(self):
         self.server.shutdown()
@@ -581,7 +599,9 @@ class APITests(PrintStatusCase):
     def test_configure_each_kind_over_https(self):
         code, result = self.request('POST', '/api/printer', BAMBU)
         self.assertEqual(code, 200)
-        self.assertEqual(set(result), {'configured', 'kind', 'connection', 'fresh', 'age_seconds', 'host', 'serial', 'fields'})
+        self.assertEqual(set(result), {'configured', 'kind', 'connection', 'fresh', 'age_seconds', 'host', 'serial', 'fields',
+                                       'controls'})
+        self.assertEqual(result['controls'], ['pause', 'resume', 'stop', 'light'])
         self.assertEqual((result['kind'], result['host'], result['serial'], result['connection']),
                          ('bambu', '192.168.1.20', 'TESTSERIAL123', 'connecting'))
         self.assertNotIn('aB123456', json.dumps(result))
@@ -596,8 +616,10 @@ class APITests(PrintStatusCase):
         self.assertNotIn(KEY, json.dumps(result))
         self.assertEqual(set(result['fields']), set(FIELDS))
 
+        self.assertEqual(result['controls'], ['pause', 'resume', 'stop'])
         code, result = self.request('POST', '/api/printer', {'kind': 'klipper', 'url': 'http://localhost:7125'})
-        self.assertEqual((code, result['kind'], result['host']), (200, 'klipper', '127.0.0.1'))
+        self.assertEqual((code, result['kind'], result['host'], result['controls']),
+                         (200, 'klipper', '127.0.0.1', ['pause', 'resume', 'stop']))
         for body, message in [({'kind': 'octoprint', 'url': 'http://127.0.0.1:5000'}, 'Enter the OctoPrint API key.'),
                               ({'kind': 'klipper', 'url': 'http://8.8.8.8:7125'}, 'The printer must be on an attached private local network.'),
                               ({'kind': 'klipper', 'url': 'http://a:b@127.0.0.1:7125'}, 'Remove the user name and password from the address.'),
@@ -606,7 +628,7 @@ class APITests(PrintStatusCase):
                 self.assertEqual(self.request('POST', '/api/printer', body), (400, {'error': message}))
         self.assertEqual(self.request('GET', '/api/printer')[1]['kind'], 'klipper')
         code, result = self.request('DELETE', '/api/printer')
-        self.assertEqual((code, result['kind'], result['configured']), (200, None, False))
+        self.assertEqual((code, result['kind'], result['configured'], result['controls']), (200, None, False, []))
 
     def test_discover_lists_every_kind(self):
         local = [{'kind': 'octoprint', 'url': 'http://127.0.0.1:5000', 'name': 'OctoPrint', 'host': None,

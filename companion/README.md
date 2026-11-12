@@ -92,9 +92,25 @@ Klipper and OctoPrint need Printer Pal 1.1 or later.
 
 In Printer Pal, search for printers or enter the address yourself. The search checks this Pi for Moonraker and
 OctoPrint and listens for Bambu printers on your network. Addresses must be this Pi or another device on your local
-network; the companion checks them every few seconds and only reads status. Layer numbers from Klipper need a slicer
+network; the companion reads status from them every few seconds. Layer numbers from Klipper need a slicer
 that sends them (`SET_PRINT_STATS_INFO`); OctoPrint doesn't report layers. An `https://` address needs a certificate
 the Pi trusts, so use the `http://127.0.0.1` address for a server on the same Pi.
+
+### Printer controls
+
+With companion 0.9.0 or later, paired phones can pause, resume, or stop a print. On Bambu Lab printers they can also
+turn the chamber light on or off. The companion only sends a command when a paired phone asks for one, and only to the
+printer address you saved. It never uses Bambu Cloud. Older versions of Printer Pal don't show the controls.
+
+Newer Bambu firmware may ignore control commands over the local connection unless **Developer Mode** is turned on in
+the printer's LAN settings. Status still works either way.
+
+### Print history
+
+The companion keeps a list of recent prints: name, start and end time, how long each took, and whether it finished,
+failed, was stopped, or was interrupted (for example by a power cut). It's built from the printer status, stored only on
+the Pi in `/var/lib/print-monitor/prints.json`, and only sent to paired phones that ask for it. The newest 200 prints
+are kept. You can clear the list in Printer Pal; a print in progress stays. Uninstalling removes it.
 
 ## Timelapses
 
@@ -125,7 +141,7 @@ stops if the Pi has less than 500 MiB free. Uninstalling removes them.
 sudo print-monitor uninstall --confirm
 ```
 
-This removes the companion, its settings, its security identity, all phone pairings, and all timelapses. Shared packages it may have
+This removes the companion, its settings, its security identity, all phone pairings, print history, and all timelapses. Shared packages it may have
 installed, such as Python libraries, ffmpeg, and avahi, are left in place. Then remove the camera in Printer Pal.
 
 ## More

@@ -26,6 +26,16 @@ and your local network.
   the printer in Printer Pal removes the access code or key. `sudo print-monitor uninstall --confirm` removes everything from a Pi.
   On a spare device, iOS can keep an app's Keychain items after the app is deleted, so disconnect the printer and
   forget paired phones first.
+- **Smart charging (optional, off by default):** if you turn it on, Printer Pal Camera asks for Home access on the
+  spare device, lists the smart plugs in your Home, and switches only the plug you choose, based on the device's
+  battery level and temperature. Your Home data stays on the device and isn't sent anywhere.
+- **Print history:** the camera keeps a list of the prints it has seen (name, start and end time, result, progress,
+  and layer count), up to 200, on the Pi or spare device. You can clear it in Printer Pal.
+- **Printer's own camera:** if you add a Bambu printer's built-in camera, its address, serial number, and LAN access
+  code are saved on your iPhone or iPad, with the access code in the Keychain. The access code is sent only to that
+  printer.
+- **Widgets:** the latest print status and camera battery are saved in a container shared only with Printer Pal's
+  own widgets on that device.
 - **Timelapses (optional, off by default):** when you record a timelapse or turn on automatic recording, the camera
   saves still frames of your printer on the Pi or spare device itself. They're deleted after 30 days, when timelapses
   use more than 1 GB, when you delete them in Printer Pal, or when you uninstall the companion or delete Printer Pal
@@ -38,6 +48,8 @@ and your local network.
   service with its own [privacy policy](https://tailscale.com/privacy-policy).
 - **Printer status** is read by your camera (Pi or spare iPhone) directly from your printer, or from Klipper or
   OctoPrint, on your network. Printer Pal doesn't sign in to Bambu Cloud or any other printer service.
+- **Printer controls** (pause, resume, stop, and a Bambu chamber light) are sent only when you tap them, from your
+  paired phone to your camera and from the camera to the printer, all on your network.
 - **Print alerts (optional, off by default):** if you turn them on, Printer Pal Camera writes a short alert (the
   camera's name, the print's name, and whether it finished, stopped, or paused) to your own private iCloud database,
   and Apple delivers it as a notification to Printer Pal on devices signed in to the same Apple ID. Each camera keeps
@@ -45,10 +57,10 @@ and your local network.
   Pal stops notifications, and turning them off in Printer Pal Camera stops new alerts.
 - **Remote viewing with a spare iPhone or iPad:** when you open a spare-device camera in Printer Pal away from home,
   Printer Pal writes a short request to your own private iCloud database, and while that request is current (about
-  a minute, renewed while you watch), Printer Pal Camera saves a still picture there every couple of seconds,
-  overwriting the last one. Pictures are encrypted on the camera with a key that only your paired devices receive,
-  over the local encrypted connection, so neither Apple nor the developer can see them. Nothing is sent when no one
-  is watching. Turn off "View away from home" in Printer Pal Camera to stop it; forgetting paired phones there
+  a minute, renewed while you watch), Printer Pal Camera saves a still picture there every couple of seconds, with
+  its battery level, charging state, and temperature, overwriting the last one. Both are encrypted on the camera
+  with a key that only your paired devices receive, over the local encrypted connection, so neither Apple nor the
+  developer can see them. Nothing is sent when no one is watching. Turn off "View away from home" in Printer Pal Camera to stop it; forgetting paired phones there
   changes the key.
 - **Installing from the app:** your Pi's password is sent only to that Pi, over SSH, and isn't saved.
 - **Installing and updating the companion** downloads it from GitHub, and the Pi downloads system packages from its

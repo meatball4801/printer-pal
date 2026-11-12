@@ -1,4 +1,4 @@
-"""Bambu Lab local MQTT protocol: settings, TLS, reports, and discovery. No cloud login or control API.
+"""Bambu Lab local MQTT protocol: settings, TLS, reports, and discovery. No cloud login.
 
 The status monitor itself lives in print_status.py.
 """

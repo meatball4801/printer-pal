@@ -191,7 +191,7 @@ class Installer:
             print('Upgraded HTTP to HTTPS. Old phone access was revoked; pair again with the setup QR.', flush=True)
         destination = self.path("/opt/print-monitor")
         destination.mkdir(parents=True, exist_ok=True)
-        for name in ("agent.py", "config.py", "camera_source.py", "autodetect.py", "usb_camera.py", "network_guard.py", "transport.py", "bambu_monitor.py", "print_status.py", "timelapse.py", "bambu-printer-ca.pem"):
+        for name in ("agent.py", "config.py", "camera_source.py", "autodetect.py", "usb_camera.py", "network_guard.py", "transport.py", "bambu_monitor.py", "print_status.py", "print_history.py", "timelapse.py", "bambu-printer-ca.pem"):
             atomic_write(destination / name, (SOURCE / name).read_text())
         atomic_write(self.path("/usr/local/bin/print-monitor"), (SOURCE / "control.py").read_text(), 0o755)
         state = self.path("/var/lib/print-monitor")

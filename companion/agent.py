@@ -18,9 +18,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
 from config import load_config, validate_config
 from camera_source import CameraWorker
+from print_status import ControlError
 from timelapse import TimelapseConflict, UnknownTimelapse, valid_id
 
-VERSION = "0.8.0"
+VERSION = "0.9.0"
 
 
 class FrameBuffer(io.BufferedIOBase):
@@ -175,6 +176,7 @@ class CameraServer(ThreadingHTTPServer):
         self.tls_context, self.network_policy = tls_context, network_policy
         self.printer = None
         self.timelapse = None
+        self.history = None
         self.download_slots = threading.BoundedSemaphore(2)
 
     def verify_request(self, request, client_address):
@@ -266,6 +268,9 @@ class CameraHandler(BaseHTTPRequestHandler):
         if path in ('/api/timelapse', '/api/timelapse/start', '/api/timelapse/stop'):
             self.timelapse_request('POST', path)
             return
+        if path == '/api/printer/control':
+            self.control_request()
+            return
         if path not in ("/api/pair", "/api/printer"):
             self.send_json(404, {"error": "Not found"})
             return
@@ -302,6 +307,9 @@ class CameraHandler(BaseHTTPRequestHandler):
         if path.startswith('/api/timelapses/'):
             self.timelapse_request('DELETE', path)
             return
+        if path == '/api/prints':
+            self.prints_request('DELETE')
+            return
         if path != '/api/printer':
             self.send_json(404, {'error': 'Not found'})
             return
@@ -327,6 +335,9 @@ class CameraHandler(BaseHTTPRequestHandler):
             return
         if path in ('/api/timelapse', '/api/timelapses') or path.startswith('/api/timelapses/'):
             self.timelapse_request('GET', path)
+            return
+        if path == '/api/prints':
+            self.prints_request('GET')
             return
         if path not in ("/api/status", "/api/printer", "/api/printers/discover", "/snapshot", "/stream"):
             self.send_json(404, {"error": "Not found"})
@@ -401,6 +412,42 @@ class CameraHandler(BaseHTTPRequestHandler):
         if not isinstance(body, dict):
             raise ValueError()
         return body
+
+    def prints_request(self, method):
+        if not self.server.state.authorized(self.headers.get('Authorization')):
+            self.send_json(401, {'error': 'Pair this camera before viewing.'})
+            return
+        history = self.server.history
+        if history is None:
+            self.send_json(503, {'error': 'Print history is unavailable.'})
+            return
+        if method == 'GET':
+            self.send_json(200, history.list())
+            return
+        try:
+            history.clear()
+        except OSError:
+            self.send_json(500, {'error': 'Could not save print history on the Pi. Check its storage.'})
+        else:
+            self.send_json(200, {'deleted': True})
+
+    def control_request(self):
+        if not self.server.state.authorized(self.headers.get('Authorization')):
+            self.send_json(401, {'error': 'Pair this camera before viewing.'})
+            return
+        if self.server.printer is None:
+            self.send_json(503, {'error': 'Printer monitoring is unavailable.'})
+            return
+        try:
+            body = self.read_json_body()
+        except (ValueError, UnicodeError, RecursionError):
+            body = None  # Reported as an unknown action, after the rate limit.
+        try:
+            self.server.printer.control(body)
+        except ControlError as error:
+            self.send_json(error.status, {'error': error.message})
+        else:
+            self.send_json(200, {'sent': True})
 
     def timelapse_request(self, method, path):
         if not self.server.state.authorized(self.headers.get('Authorization')):
@@ -547,6 +594,14 @@ def main():
     server = make_server(args.host, config["port"], state, frames, config["name"], bool(args.test_image), context, LANPolicy())
     from print_status import PrinterMonitor
     server.printer = PrinterMonitor(Path(args.state).with_name('printer.json'), server.network_policy, stop)
+    from print_history import PrintHistory, storage_path
+    try:
+        server.history = PrintHistory(storage_path(args.state), server.printer.snapshot)
+    except OSError as error:
+        logging.warning('Print history storage is unavailable (%s)', type(error).__name__)
+    else:
+        server.printer.listeners.append(server.history.observe)
+        server.printer.settings_listeners.append(server.history.printer_changed)
     from timelapse import TimelapseRecorder, frame_reader, printer_status, storage_paths
     try:
         server.timelapse = TimelapseRecorder(*storage_paths(args.state), frame_reader(frames),

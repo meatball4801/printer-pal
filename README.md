@@ -42,10 +42,16 @@ the [companion guide](companion/README.md).
 
 - Live video with pinch to zoom, full screen, rotation, pause, and snapshots
 - Automatic reconnection and a built-in connection check
-- Timelapses recorded on your camera, one frame per layer on Bambu printers or on a timer, saved as videos on your phone
+- Timelapses recorded on your camera, one frame per layer on Bambu printers or on a timer, made into videos on your phone and kept in a Timelapses tab you can watch and share from anywhere
 - Works alongside OctoPrint, Klipper (Mainsail/Fluidd), and other camera software already on your Pi
-- Bambu Lab print status through your camera, Pi or spare iPhone: progress, layers, temperatures, and AMS slots (experimental, [guide](companion/BAMBU.md))
-- Optional viewing away from home through your own Tailscale network ([guide](companion/REMOTE.md))
+- Several printers in one app, with a live grid overview
+- Print status from Bambu Lab printers, Klipper, and OctoPrint, with either a Pi or a spare iPhone: progress, layers, temperatures, and AMS slots ([Bambu guide](companion/BAMBU.md), [Klipper and OctoPrint](companion/README.md#printer-status))
+- Pause, resume, or stop a print, and switch a Bambu chamber light (newer Bambu firmware may need Developer Mode for LAN controls)
+- Print history for each camera, with totals for prints, finished rate, and print time
+- Watch a Bambu Lab P1 or A1 printer through its own camera, with no extra hardware
+- Home Screen and Lock Screen widgets with print progress, time left, and spare-phone battery
+- Notifications when a print finishes, stops, or pauses, through your own iCloud (from Printer Pal Camera)
+- Viewing away from home: a picture every couple of seconds through your own iCloud with a spare iPhone or iPad (encrypted, no setup), or live video through your own Tailscale network with a Pi ([guide](companion/REMOTE.md))
 
 ## Privacy and security
 
@@ -59,10 +65,12 @@ More detail in the [security notes](companion/SECURITY.md) and the [privacy poli
 
 ## Known limitations
 
-- One camera per app for now.
-- Viewing is on your home Wi-Fi unless you set up [Tailscale](companion/REMOTE.md).
+- Live video is on your home Wi-Fi unless you set up [Tailscale](companion/REMOTE.md) on a Pi. Away from home, a spare iPhone or iPad sends pictures through iCloud instead, which needs both devices signed in to the same Apple ID.
 - Printer Pal Camera must stay open on the spare device; iOS doesn't allow the camera in the background.
-- Bambu status is experimental and has been tested on a limited set of printers and firmware.
+- Printer status and controls have been tested on a limited set of printers and firmware.
+- The printer's own camera works with Bambu P1 and A1 printers; X1 printers aren't supported yet.
+- Widgets show the last status Printer Pal read. iOS decides how often the app can refresh in the background.
+- Print alerts currently come only from Printer Pal Camera, signed in to the same Apple ID as your phone.
 - USB webcams and Pi models other than the Pi 4 have had less testing. Reports are very welcome.
 
 ## Feedback

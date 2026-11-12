@@ -12,7 +12,7 @@ and what it doesn't cover.
   certificate stops the connection; there's no fallback to an unencrypted connection.
 - Pairing allows five wrong codes per minute. A successful pairing gives the phone a random 256-bit access token. The
   camera stores only a hash of it; the phone keeps the token and certificate fingerprint in its Keychain.
-- Video, status, snapshots, and timelapses all require that token. `sudo print-monitor forget-phones --confirm` revokes every
+- Video, status, snapshots, timelapses, print history, and printer controls all require that token. `sudo print-monitor forget-phones --confirm` revokes every
   phone immediately, including streams in progress.
 - Connections use TLS 1.2 or newer. Cameras added with **Use a camera URL** over plain HTTP aren't encrypted.
 
@@ -31,7 +31,12 @@ and what it doesn't cover.
 - The access code or API key is only received from a paired phone over HTTPS. It's never sent back by the API, never
   logged, and only sent to the printer address you entered.
 - That address must be the Pi itself or a device on a network the Pi is attached to, and it's checked again before
-  each connection. The companion only reads status: it sends no print or printer control commands.
+  each connection.
+- Paired phones can pause, resume, or stop a print, and turn a Bambu chamber light on or off. The companion sends
+  these commands only when a paired phone asks, only to the saved printer address, and at most once a second. It
+  sends nothing else to the printer and never uses Bambu Cloud.
+- Print history is stored only on the Pi, in the service's private state directory, and is only sent to a paired
+  phone that asks for it. The newest 200 prints are kept.
 
 ## Network boundary
 

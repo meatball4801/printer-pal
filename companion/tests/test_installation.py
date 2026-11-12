@@ -53,6 +53,7 @@ class InstallTests(unittest.TestCase):
         self.assertTrue((self.root / 'opt/print-monitor/camera_source.py').exists())
         self.assertTrue((self.root / 'opt/print-monitor/timelapse.py').exists())
         self.assertTrue((self.root / 'opt/print-monitor/print_status.py').exists())
+        self.assertTrue((self.root / 'opt/print-monitor/print_history.py').exists())
         self.assertEqual((self.root / 'etc/print-monitor/config.json').stat().st_mode & 0o777, 0o640)
         unit = (self.root / 'etc/systemd/system/print-monitor.service').read_text()
         self.assertIn('Restart=always', unit)
